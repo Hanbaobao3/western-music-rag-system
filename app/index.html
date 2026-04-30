@@ -327,10 +327,16 @@
 
         // 发送消息
         async function sendMessage() {
+            console.log('sendMessage被调用');
             const input = document.getElementById('userInput');
             const message = input.value.trim();
 
-            if (!message || isProcessing) return;
+            console.log('用户消息:', message);
+
+            if (!message || isProcessing) {
+                console.log('消息为空或正在处理中，退出');
+                return;
+            }
 
             // 显示用户消息
             addMessage(message, 'user');
@@ -341,8 +347,10 @@
             updateSendButton();
 
             try {
+                console.log('准备调用API');
                 // 调用RAG API
                 const response = await callRAGAPI(message);
+                console.log('API响应:', response);
 
                 // 显示助手回复
                 const aiGenerated = response.aiGenerated || false;
@@ -474,16 +482,22 @@
 
         // 选择历史时期
         function selectPeriod(period) {
+            console.log('selectPeriod被调用:', period);
             currentPeriod = period;
 
             // 更新UI状态
-            document.querySelectorAll('.period-card').forEach(card => {
+            const periodCards = document.querySelectorAll('.period-card');
+            console.log('找到的时期卡片:', periodCards.length);
+
+            periodCards.forEach(card => {
                 card.classList.remove('active');
             });
 
             const selectedCard = document.getElementById(`period-${period}`);
             if (selectedCard) {
                 selectedCard.classList.add('active');
+            } else {
+                console.error('找不到选择的时期卡片:', `period-${period}`);
             }
 
             // 显示提示
@@ -493,20 +507,23 @@
 
         // 切换时间轴模式
         function toggleTimeline() {
+            console.log('toggleTimeline被调用');
             isTimelineMode = !isTimelineMode;
             const chatInterface = document.getElementById('chatInterface');
             const timelineMode = document.getElementById('timelineMode');
             const timelineBtn = document.getElementById('timelineBtn');
 
+            console.log('元素检查:', { chatInterface, timelineMode, timelineBtn });
+
             if (isTimelineMode) {
-                chatInterface.classList.add('hidden');
-                timelineMode.classList.remove('hidden');
-                timelineBtn.innerHTML = '<i class="ph ph-chat-circle"></i><span>对话模式</span>';
+                if (chatInterface) chatInterface.classList.add('hidden');
+                if (timelineMode) timelineMode.classList.remove('hidden');
+                if (timelineBtn) timelineBtn.innerHTML = '<i class="ph ph-chat-circle"></i><span>对话模式</span>';
                 showNotification('已切换到时间轴模式');
             } else {
-                chatInterface.classList.remove('hidden');
-                timelineMode.classList.add('hidden');
-                timelineBtn.innerHTML = '<i class="ph ph-timeline"></i><span>时间轴</span>';
+                if (chatInterface) chatInterface.classList.remove('hidden');
+                if (timelineMode) timelineMode.classList.add('hidden');
+                if (timelineBtn) timelineBtn.innerHTML = '<i class="ph ph-timeline"></i><span>时间轴</span>';
                 showNotification('已切换到对话模式');
             }
         }
@@ -563,6 +580,7 @@
 
         // 清空历史
         function clearHistory() {
+            console.log('clearHistory被调用');
             chatHistory = [];
             updateHistoryUI();
             showNotification('历史记录已清空');
@@ -570,7 +588,13 @@
 
         // 开始新对话
         function startNewChat() {
-            document.getElementById('chatMessages').innerHTML = '';
+            console.log('startNewChat被调用');
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+                chatMessages.innerHTML = '';
+            } else {
+                console.error('找不到chatMessages元素');
+            }
             showNotification('已开始新对话');
         }
 
@@ -590,6 +614,7 @@
 
         // 显示通知
         function showNotification(message) {
+            console.log('显示通知:', message);
             const notification = document.createElement('div');
             notification.className = 'fixed top-4 right-4 glass-effect rounded-xl px-6 py-4 text-[var(--text-primary)] max-w-sm animate-fade-in z-50';
             notification.innerHTML = `
@@ -600,6 +625,7 @@
             `;
 
             document.body.appendChild(notification);
+            console.log('通知已添加到页面');
 
             setTimeout(() => {
                 notification.style.opacity = '0';
@@ -609,16 +635,39 @@
 
         // 键盘事件处理
         function handleKeyPress(event) {
+            console.log('键盘事件:', event.key);
             if (event.key === 'Enter') {
                 event.preventDefault();
+                console.log('Enter键按下，调用sendMessage');
                 sendMessage();
             }
         }
 
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
-            updateHistoryUI();
-            showNotification('欢迎来到西方音乐史问答系统！');
+            console.log('DOM加载完成，开始初始化...');
+            try {
+                updateHistoryUI();
+                showNotification('欢迎来到西方音乐史问答系统！');
+                console.log('初始化完成');
+
+                // 检查关键元素是否存在
+                const userInput = document.getElementById('userInput');
+                const sendButton = document.querySelector('[onclick="sendMessage()"]');
+                const chatMessages = document.getElementById('chatMessages');
+
+                console.log('关键元素检查:', {
+                    userInput: !!userInput,
+                    sendButton: !!sendButton,
+                    chatMessages: !!chatMessages
+                });
+
+                if (!userInput || !sendButton || !chatMessages) {
+                    console.error('缺少关键元素，交互可能无法正常工作');
+                }
+            } catch (error) {
+                console.error('初始化错误:', error);
+            }
         });
     </script>
 </body>
