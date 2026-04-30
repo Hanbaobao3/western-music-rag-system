@@ -1,1 +1,1 @@
-web: python app/advanced_music_server.py
+web: python app/simple_ai_server.py
