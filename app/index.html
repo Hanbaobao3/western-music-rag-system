@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>西方音乐史RAG问答系统</title>
+
+    <!-- 引入Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+    <!-- 引入Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 引入Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        /* 基础样式 */
+        :root {
+            --bg-primary: #f8f9fa;
+            --text-primary: #1a1a1a;
+            --accent-color: #d4a017;
+            --border-color: #e5e7eb;
+            --white: #ffffff;
+            --hover-bg: #e9ecef5;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-primary);
+        }
+
+        .font-serif {
+            font-family: 'Playfair Display', serif;
+        }
+
+        /* 简化后的玻璃态效果 */
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent-color);
+            border-radius: 3px;
+        }
+
+        /* 简化的动画 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.2s ease-out forwards;
+        }
+
+        /* 聊天气泡样式 */
+        .chat-bubble-user {
+            background: var(--accent-color);
+            color: white;
+            border-radius: 12px;
+            margin-left: auto;
+        }
+
+        .chat-bubble-assistant {
+            background: var(--white);
+            color: var(--text-primary);
+            border-radius: 12px;
+            margin-right: auto;
+            border: 1px solid var(--border-color);
+        }
+
+        /* 时期卡片样式 */
+        .period-card {
+            transition: background-color 0.2s;
+            cursor: pointer;
+        }
+
+        .period-card:hover {
+            background-color: var(--hover-bg);
+        }
+
+        .period-card.active {
+            border-color: var(--accent-color);
+            background-color: var(--white);
+            box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.2);
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .desktop-layout {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                order: 2;
+            }
+
+            .main-content {
+                order: 1;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- 主容器 -->
+    <div class="flex h-screen overflow-hidden bg-[var(--bg-primary)]">
+
+        <!-- 左侧边栏：历史记录 -->
+        <div class="w-64 border-r border-[var(--border-color)] flex flex-col bg-[var(--white)]">
+            <div class="p-4 border-b border-[var(--border-color)]">
+                <div class="flex items-center gap-2">
+                    <i class="ph ph-clock-counter-clockwise text-xl text-[var(--accent-color)]"></i>
+                    <h2 class="font-serif text-lg font-bold text-[var(--text-primary)]">对话历史</h2>
+                </div>
+                <button onclick="clearHistory()" class="mt-2 w-full py-2 px-3 rounded-lg bg-gray-100 text-[var(--text-primary)] hover:bg-gray-200 transition-colors flex items-center gap-2 justify-center text-sm">
+                    <i class="ph ph-trash"></i>
+                    <span>清空历史</span>
+                </button>
+            </div>
+
+            <div id="historyList" class="flex-1 overflow-y-auto p-3 space-y-2">
+                <!-- 历史记录将在这里动态生成 -->
+            </div>
+
+            <div class="p-3 border-t border-[var(--border-color)]">
+                <button onclick="startNewChat()" class="w-full py-2 px-4 rounded-xl bg-[var(--accent-color)] text-white font-medium hover:bg-[#b54802] transition-colors flex items-center gap-2 justify-center">
+                    <i class="ph ph-plus-circle"></i>
+                    <span>开始新对话</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 中间主窗口：交互区 -->
+        <div class="flex-1 flex flex-col">
+            <!-- 顶部状态栏 -->
+            <div class="h-14 border-b border-[var(--border-color)] flex items-center justify-between px-6 bg-[var(--white)]">
+                <div class="flex items-center gap-3">
+                    <h1 class="font-serif text-xl font-bold text-[var(--text-primary)]">西方音乐史问答</h1>
+                    <span id="statusIndicator" class="px-2 py-1 rounded-full bg-green-100 text-green-800 text-xs font-medium">在线</span>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleTimeline()" id="timelineBtn" class="px-4 py-2 rounded-lg bg-gray-100 text-[var(--text-primary)] hover:bg-gray-200 transition-colors flex items-center gap-2 border border-[var(--border-color)] text-sm">
+                        <i class="ph ph-timeline"></i>
+                        <span>时间轴</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 时间轴模式 -->
+            <div id="timelineMode" class="hidden flex-1 overflow-y-auto p-6 bg-[var(--bg-primary)]">
+                <div class="max-w-2xl mx-auto space-y-4">
+                    <div class="glass-effect rounded-lg p-6">
+                        <h3 class="font-serif text-xl font-bold text-[var(--text-primary)] mb-4">中世纪 (500-1400)</h3>
+                        <p class="text-[var(--text-primary)] leading-relaxed">宗教音乐为主，单声部格列高特，代表人物：莱奥宁、马肖等。</p>
+                    </div>
+
+                    <div class="glass-effect rounded-lg p-6">
+                        <h3 class="font-serif text-xl font-bold text-[var(--text-primary)] mb-4">文艺复兴 (1400-1600)</h3>
+                        <p class="text-[var(--text-primary)] leading-relaxed">人文主义兴起，复调音乐达到顶峰，代表人物：帕莱斯特里纳、拉索等。</p>
+                    </div>
+
+                    <div class="glass-effect rounded-lg p-6">
+                        <h3 class="font-serif text-xl font-bold text-[var(--text-primary)] mb-4">巴洛克 (1600-1750)</h3>
+                        <p class="text-[var(--text-primary)] leading-relaxed">华丽装饰性强，使用通奏低音，强调戏剧性对比。代表人物：巴赫、亨德尔。</p>
+                    </div>
+
+                    <div class="glass-effect rounded-lg p-6">
+                        <h3 class="font-serif text-xl font-bold text-[var(--text-primary)] mb-4">古典主义 (1750-1820)</h3>
+                        <p class="text-[var(--text-primary)] leading-relaxed">理性均衡，确立交响曲、奏鸣曲等体裁。代表人物：海顿、莫扎特、贝多芬。</p>
+                    </div>
+
+                    <div class="glass-effect rounded-lg p-6">
+                        <h3 class="font-serif text-xl font-bold text-[var(--text-primary)] mb-4">浪漫主义 (1820-1900)</h3>
+                        <p class="text-[var(--text-primary)] leading-relaxed">强调个人情感表达，和声更加丰富，节奏更加自由。代表人物：肖邦、李斯特、瓦格纳。</p>
+                    </div>
+
+                    <div class="glass-effect rounded-lg p-6">
+                        <h3 class="font-serif text-xl font-bold text-[var(--text-primary)] mb-4">现代主义 (1900-至今)</h3>
+                        <p class="text-[var(--text-primary)] leading-relaxed">多元化发展，突破传统和声与调性。代表人物：德彪西、斯特拉文斯基。</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 聊天界面 -->
+            <div id="chatInterface" class="flex-1 flex flex-col overflow-hidden">
+                <!-- 聊天记录区域 -->
+                <div id="chatMessages" class="flex-1 overflow-y-auto p-6 space-y-4">
+                    <!-- 欢迎消息 -->
+                    <div class="flex gap-3 animate-fade-in">
+                        <div class="w-8 h-8 rounded-full bg-[var(--accent-color)] flex items-center justify-center flex-shrink-0">
+                            <i class="ph ph-music-notes text-lg text-white"></i>
+                        </div>
+                        <div class="chat-bubble-assistant p-4 max-w-2xl">
+                            <p class="text-[var(--text-primary)]">你好！我是西方音乐史问答助手。你可以问我关于西方音乐史的任何问题，我会基于知识库为你提供准确的答案。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 输入区域 -->
+                <div class="p-4 border-t border-[var(--border-color)] bg-[var(--white)]">
+                    <div class="flex gap-2">
+                        <input
+                            type="text"
+                            id="userInput"
+                            placeholder="输入你的问题..."
+                            class="flex-1 px-4 py-3 rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-color)] transition-all"
+                            onkeypress="handleKeyPress(event)"
+                        >
+                        <button
+                            onclick="sendMessage()"
+                            id="sendBtn"
+                            class="px-6 py-3 rounded-lg bg-[var(--accent-color)] text-white font-medium hover:bg-[#b54802] transition-colors flex items-center gap-2">
+                            <i class="ph ph-paper-plane-right"></i>
+                            <span>发送</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧边栏：时期导航 -->
+        <div class="w-64 border-l border-[var(--border-color)] flex flex-col bg-[var(--white)]">
+            <div class="p-4 border-b border-[var(--border-color)]">
+                <div class="flex items-center gap-2">
+                    <i class="ph ph-book-open text-xl text-[var(--accent-color)]"></i>
+                    <h2 class="font-serif text-lg font-bold text-[var(--text-primary)]">历史时期</h2>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-3 space-y-2">
+                <div onclick="selectPeriod('medieval')" class="period-card glass-effect rounded-lg p-4 cursor-pointer border border-[var(--border-color)]">
+                    <div class="flex items-center gap-3">
+                        <i class="ph ph-church text-xl text-[var(--accent-color)]"></i>
+                        <div>
+                            <h3 class="font-serif font-bold text-[var(--text-primary)]">中世纪</h3>
+                            <p class="text-sm text-gray-500">500-1400</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div onclick="selectPeriod('renaissance')" class="period-card glass-effect rounded-lg p-4 cursor-pointer border border-[var(--border-color)]">
+                    <div class="flex items-center gap-3">
+                        <i class="ph ph-paint-brush text-xl text-[var(--accent-color)]"></i>
+                        <div>
+                            <h3 class="font-serif font-bold text-[var(--text-primary)]">文艺复兴</h3>
+                            <p class="text-sm text-gray-500">1400-1600</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div onclick="selectPeriod('baroque')" class="period-card glass-effect rounded-lg p-4 cursor-pointer border border-[var(--border-color)]" id="period-baroque">
+                    <div class="flex items-center gap-3">
+                        <i class="ph ph-crown text-xl text-[var(--accent-color)]"></i>
+                        <div>
+                            <h3 class="font-serif font-bold text-[var(--text-primary)]">巴洛克</h3>
+                            <p class="text-sm text-gray-500">1600-1750</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div onclick="selectPeriod('classical')" class="period-card glass-effect rounded-lg p-4 cursor-pointer border border-[var(--border-color)]" id="period-classical">
+                    <div class="flex items-center gap-3">
+                        <i class="ph ph-scales text-xl text-[var(--accent-color)]"></i>
+                        <div>
+                            <h3 class="font-serif font-bold text-[var(--text-primary)]">古典主义</h3>
+                            <p class="text-sm text-gray-500">1750-1820</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div onclick="selectPeriod('romantic')" class="period-card glass-effect rounded-lg p-4 cursor-pointer border border-[var(--border-color)]" id="period-romantic">
+                    <div class="flex items-center gap-3">
+                        <i class="ph ph-heart text-xl text-[var(--accent-color)]"></i>
+                        <div>
+                            <h3 class="font-serif font-bold text-[var(--text-primary)]">浪漫主义</h3>
+                            <p class="text-sm text-gray-500">1820-1900</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div onclick="selectPeriod('modern')" class="period-card glass-effect rounded-lg p-4 cursor-pointer border border-[var(--border-color)]" id="period-modern">
+                    <div class="flex items-center gap-3">
+                        <i class="ph ph-waves text-xl text-[var(--accent-color)]"></i>
+                        <div>
+                            <h3 class="font-serif font-bold text-[var(--text-primary)]">现代主义</h3>
+                            <p class="text-sm text-gray-500">1900-至今</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript 功能 -->
+    <script>
+        // 状态管理
+        let currentPeriod = 'all';
+        let chatHistory = [];
+        let isTimelineMode = false;
+        let isProcessing = false;
+
+        // 时期配置
+        const periods = {
+            'medieval': { name: '中世纪', years: '500-1400', keywords: ['中世纪', '宗教音乐', '单声部', '格列高特'] },
+            'renaissance': { name: '文艺复兴', years: '1400-1600', keywords: ['文艺复兴', '人文主义', '复调', '帕莱斯特里纳'] },
+            'baroque': { name: '巴洛克', years: '1600-1750', keywords: ['巴洛克', '华丽', '通奏低音', '巴赫', '亨德尔'] },
+            'classical': { name: '古典主义', years: '1750-1820', keywords: ['古典主义', '海顿', '莫扎特', '贝多芬', '交响曲'] },
+            'romantic': { name: '浪漫主义', years: '1820-1900', keywords: ['浪漫主义', '肖邦', '李斯特', '瓦格纳', '情感表达'] },
+            'modern': { name: '现代主义', years: '1900-至今', keywords: ['现代主义', '德彪西', '斯特拉文斯基', '多元化'] }
+        };
+
+        // 发送消息
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const message = input.value.trim();
+
+            if (!message || isProcessing) return;
+
+            // 显示用户消息
+            addMessage(message, 'user');
+            input.value = '';
+
+            // 显示加载状态
+            isProcessing = true;
+            updateSendButton();
+
+            try {
+                // 调用RAG API
+                const response = await callRAGAPI(message);
+
+                // 显示助手回复
+                const aiGenerated = response.aiGenerated || false;
+                const modelName = response.model || 'unknown';
+                addMessage(response.answer, 'assistant', response.retrievedDocs, aiGenerated, modelName);
+
+                // 保存到历史记录
+                saveToHistory(message, response.answer);
+
+                // 如果是AI生成的，显示通知
+                if (aiGenerated) {
+                    showNotification('✨ AI增强答案已生成');
+                }
+
+            } catch (error) {
+                console.error('API调用错误:', error);
+                addMessage('抱歉，网络连接出现问题，请稍后再试。', 'assistant');
+            } finally {
+                isProcessing = false;
+                updateSendButton();
+            }
+        }
+
+        // 调用RAG API（修复版）
+        async function callRAGAPI(query) {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: query
+                    })
+                });
+
+                if (!response.ok) {
+                    console.error(`API调用失败: ${response.status}`);
+                    throw new Error(`HTTP错误: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // 格式化返回的数据
+                if (data.success && data.answer) {
+                    return {
+                        answer: data.answer,
+                        retrievedDocs: [], // 知识库检索文档（新服务器版本不返回这个字段）
+                        period: data.period,
+                        aiGenerated: data.ai_generated || false,
+                        model: data.model || '专业音乐史知识库',
+                        timestamp: data.timestamp
+                    };
+                } else {
+                    throw new Error(data.error || '查询失败');
+                }
+            } catch (error) {
+                console.error('API调用错误:', error);
+                // 显示错误提示给用户
+                showNotification('网络连接出现问题，请确保服务器正在运行。', 'error');
+
+                // 返回错误消息
+                throw new Error(error.message || '网络错误');
+            }
+        }
+
+        // 添加消息到聊天界面
+        function addMessage(content, type, retrievedDocs = null, aiGenerated = false, modelName = '') {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex gap-3 ${type === 'user' ? '' : 'animate-fade-in'}`;
+
+            if (type === 'user') {
+                messageDiv.innerHTML = `
+                    <div class="w-8 h-8 rounded-full bg-[var(--accent-color)] flex items-center justify-center flex-shrink-0">
+                        <i class="ph ph-user text-base text-white"></i>
+                    </div>
+                    <div class="chat-bubble-user p-4 max-w-2xl">
+                        <p class="text-[var(--text-primary)]">${content}</p>
+                    </div>
+                `;
+            } else {
+                let retrievedDocsHtml = '';
+                if (retrievedDocs && retrievedDocs.length > 0) {
+                    retrievedDocsHtml = `
+                        <div class="mt-3 pt-3 border-t border-[var(--border-color)]">
+                            <p class="text-sm font-medium mb-2 text-[var(--accent-color)]">📚 参考文档 (${retrievedDocs.length}个)</p>
+                            <div class="space-y-2">
+                                ${retrievedDocs.map((doc, i) => `
+                                    <div class="glass-effect rounded-lg p-3 text-sm">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <span class="w-5 h-5 rounded-full bg-[var(--accent-color)] text-white text-xs flex items-center justify-center">${i + 1}</span>
+                                            <span class="text-xs text-gray-500">相似度: ${(doc.similarity * 100).toFixed(0)}%</span>
+                                        </div>
+                                        <p class="text-[var(--text-primary)] line-clamp-2">${doc.content.substring(0, 80)}...</p>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                const aiBadge = aiGenerated ? `
+                    <div class="mt-3 pt-3 border-t border-[var(--border-color)]">
+                        <div class="flex items-center gap-2 text-sm">
+                            <i class="ph ph-sparkle text-[var(--accent-color)]"></i>
+                            <span class="text-gray-600">AI增强回答 by ${modelName}</span>
+                        </div>
+                    </div>
+                ` : '';
+
+                messageDiv.innerHTML = `
+                    <div class="w-8 h-8 rounded-full bg-[var(--accent-color)] flex items-center justify-center flex-shrink-0">
+                        <i class="ph ph-robot text-base text-white"></i>
+                    </div>
+                    <div class="chat-bubble-assistant p-4 max-w-2xl">
+                        <p class="text-[var(--text-primary)]">${content}</p>
+                        ${retrievedDocsHtml}
+                        ${aiBadge}
+                    </div>
+                `;
+            }
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // 选择历史时期
+        function selectPeriod(period) {
+            currentPeriod = period;
+
+            // 更新UI状态
+            document.querySelectorAll('.period-card').forEach(card => {
+                card.classList.remove('active');
+            });
+
+            const selectedCard = document.getElementById(`period-${period}`);
+            if (selectedCard) {
+                selectedCard.classList.add('active');
+            }
+
+            // 显示提示
+            const periodInfo = periods[period];
+            showNotification(`已切换到${periodInfo.name}时期 (${periodInfo.years})`);
+        }
+
+        // 切换时间轴模式
+        function toggleTimeline() {
+            isTimelineMode = !isTimelineMode;
+            const chatInterface = document.getElementById('chatInterface');
+            const timelineMode = document.getElementById('timelineMode');
+            const timelineBtn = document.getElementById('timelineBtn');
+
+            if (isTimelineMode) {
+                chatInterface.classList.add('hidden');
+                timelineMode.classList.remove('hidden');
+                timelineBtn.innerHTML = '<i class="ph ph-chat-circle"></i><span>对话模式</span>';
+                showNotification('已切换到时间轴模式');
+            } else {
+                chatInterface.classList.remove('hidden');
+                timelineMode.classList.add('hidden');
+                timelineBtn.innerHTML = '<i class="ph ph-timeline"></i><span>时间轴</span>';
+                showNotification('已切换到对话模式');
+            }
+        }
+
+        // 保存到历史记录
+        function saveToHistory(question, answer) {
+            const timestamp = new Date().toLocaleString('zh-CN');
+            chatHistory.unshift({ question, answer, timestamp });
+
+            // 限制历史记录数量
+            if (chatHistory.length > 20) {
+                chatHistory = chatHistory.slice(0, 20);
+            }
+
+            updateHistoryUI();
+        }
+
+        // 更新历史记录UI
+        function updateHistoryUI() {
+            const historyList = document.getElementById('historyList');
+
+            if (chatHistory.length === 0) {
+                historyList.innerHTML = `
+                    <div class="text-center text-gray-400 py-8">
+                        <i class="ph ph-clock-counter-clockwise text-3xl mb-2"></i>
+                        <p class="text-sm">暂无对话历史</p>
+                    </div>
+                `;
+                return;
+            }
+
+            historyList.innerHTML = chatHistory.map((item, index) => `
+                <div class="glass-effect rounded-lg p-4 cursor-pointer hover:bg-gray-50 transition-colors border border-[var(--border-color)]" onclick="loadFromHistory(${index})">
+                    <div class="flex items-start justify-between gap-2 mb-2">
+                        <span class="text-xs text-gray-400">${item.timestamp}</span>
+                        <i class="ph ph-dots-three text-gray-300"></i>
+                    </div>
+                    <p class="text-sm font-medium text-[var(--text-primary)] line-clamp-2">${item.question}</p>
+                    <p class="text-xs text-gray-500 mt-1 line-clamp-1">${item.answer.substring(0, 40)}...</p>
+                </div>
+            `).join('');
+        }
+
+        // 从历史记录加载
+        function loadFromHistory(index) {
+            const item = chatHistory[index];
+            if (item) {
+                addMessage(item.question, 'user');
+                setTimeout(() => {
+                    addMessage(item.answer, 'assistant');
+                }, 300);
+            }
+        }
+
+        // 清空历史
+        function clearHistory() {
+            chatHistory = [];
+            updateHistoryUI();
+            showNotification('历史记录已清空');
+        }
+
+        // 开始新对话
+        function startNewChat() {
+            document.getElementById('chatMessages').innerHTML = '';
+            showNotification('已开始新对话');
+        }
+
+        // 更新发送按钮状态
+        function updateSendButton() {
+            const btn = document.getElementById('sendBtn');
+            if (isProcessing) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i><span>处理中...</span>';
+                btn.classList.add('opacity-70', 'cursor-not-allowed');
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="ph ph-paper-plane-right"></i><span>发送</span>';
+                btn.classList.remove('opacity-70', 'cursor-not-allowed');
+            }
+        }
+
+        // 显示通知
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 glass-effect rounded-xl px-6 py-4 text-[var(--text-primary)] max-w-sm animate-fade-in z-50';
+            notification.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <i class="ph ph-check-circle text-xl text-green-600"></i>
+                    <p class="text-sm">${message}</p>
+                </div>
+            `;
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 300);
+            }, 2000);
+        }
+
+        // 键盘事件处理
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            updateHistoryUI();
+            showNotification('欢迎来到西方音乐史问答系统！');
+        });
+    </script>
+</body>
+</html>

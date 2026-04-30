@@ -1,0 +1,53 @@
+# RAG系统配置文件
+
+# 文档处理配置
+document_processing:
+  # 支持的文件格式
+  supported_formats:
+    - pdf
+    - txt
+    - docx
+    - xlsx
+
+  # PDF解析配置
+  pdf:
+    extract_images: false    # 是否提取图片
+    preserve_layout: true   # 是否保持布局
+
+# 文本切块配置
+chunking:
+  chunk_size: 512           # 每块最大token数
+  chunk_overlap: 50         # 块间重叠token数
+  separator: "\\n\\n"       # 分隔符
+  use_semantic: true        # 是否使用语义分块
+
+# 嵌入模型配置
+embeddings:
+  model_name: "paraphrase-multilingual-MiniLM-L12-v2"  # 模型名称
+  device: "cpu"              # 运行设备: cpu, cuda
+  cache_dir: "./models"     # 模型缓存目录
+  normalize: true           # 是否归一化嵌入向量
+
+# 向量存储配置
+vector_store:
+  embedding_dim: 384        # 嵌入维度（根据模型自动设置）
+  index_type: "flat"        # FAISS索引类型: flat, ivf, hnsw
+  metric: "cosine"          # 相似度度量: cosine, l2
+  storage_path: "./processed/vector_store"  # 存储路径
+
+# 检索配置
+retrieval:
+  top_k: 5                  # 返回的最相关结果数量
+  min_similarity: 0.7      # 最小相似度阈值
+
+# 日志配置
+logging:
+  level: "INFO"            # 日志级别: DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "./logs/rag_system.log"
+
+# 应用配置
+app:
+  host: "0.0.0.0"          # 服务器地址
+  port: 5000               # 服务器端口
+  debug: false             # 调试模式

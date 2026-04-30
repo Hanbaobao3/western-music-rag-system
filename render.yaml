@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: western-music-rag-system
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app/advanced_music_server.py
+    envVars:
+      - key: PORT
+        value: "8000"
