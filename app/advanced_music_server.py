@@ -538,7 +538,8 @@ class AdvancedRAGHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps({'status': 'ok'}).encode())
 
     def do_GET(self):
-        if self.path in ['/', '/api/health']:
+        if self.path == '/api/health':
+            # API健康检查端点
             self._set_headers()
             response = {
                 'status': 'ok',
@@ -556,6 +557,24 @@ class AdvancedRAGHandler(BaseHTTPRequestHandler):
                 ]
             }
             self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+        elif self.path == '/':
+            # 服务前端HTML页面
+            try:
+                html_file = os.path.join(os.path.dirname(__file__), 'index.html')
+                if os.path.exists(html_file):
+                    with open(html_file, 'r', encoding='utf-8') as f:
+                        html_content = f.read()
+
+                    # 设置HTML响应头
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'text/html; charset=utf-8')
+                    self.send_header('Content-Length', str(len(html_content)))
+                    self.end_headers()
+                    self.wfile.write(html_content.encode('utf-8'))
+                else:
+                    self.send_error(404, "HTML file not found")
+            except Exception as e:
+                self.send_error(500, f"Error serving HTML: {str(e)}")
         else:
             self._set_headers(404)
             self.wfile.write(json.dumps({'error': '路径不存在'}).encode())
