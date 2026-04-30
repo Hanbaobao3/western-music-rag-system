@@ -1,1 +1,1 @@
-web: python app/simple_ai_server.py
+web: python app/basic_rag_server.py
