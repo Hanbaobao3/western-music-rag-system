@@ -367,7 +367,15 @@
 
             } catch (error) {
                 console.error('API调用错误:', error);
-                addMessage('抱歉，网络连接出现问题，请稍后再试。', 'assistant');
+                // 显示具体的错误信息
+                let errorMessage = '抱歉，网络连接出现问题，请稍后再试。';
+                if (error.message) {
+                    errorMessage = `错误：${error.message}`;
+                } else if (error.toString) && error.toString().includes('Failed to fetch')) {
+                    errorMessage = '无法连接到服务器，请检查网络连接。';
+                }
+                addMessage(errorMessage, 'assistant');
+                showNotification(errorMessage, 'error');
             } finally {
                 isProcessing = false;
                 updateSendButton();
@@ -411,8 +419,14 @@
                 }
             } catch (error) {
                 console.error('API调用错误:', error);
-                // 显示错误提示给用户
-                showNotification('网络连接出现问题，请确保服务器正在运行。', 'error');
+                // 显示具体的错误信息
+                let errorMessage = '网络连接出现问题，请确保服务器正在运行。';
+                if (error.message) {
+                    errorMessage = `错误：${error.message}`;
+                } else if (error.toString() && error.toString().includes('Failed to fetch')) {
+                    errorMessage = '无法连接到服务器，请检查网络连接。';
+                }
+                showNotification(errorMessage, 'error');
 
                 // 返回错误消息
                 throw new Error(error.message || '网络错误');
