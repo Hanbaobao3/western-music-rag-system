@@ -24,6 +24,12 @@ def get_available_data_files():
             file_path = os.path.join(DATA_DIR, file_name)
             if os.path.exists(file_path):
                 available_files.append(file_path)
+            else:
+                print(f"[WARNING] 文件不存在: {file_path}")
+    else:
+        print(f"[WARNING] 数据目录不存在: {DATA_DIR}")
+        print(f"[INFO] 当前工作目录: {os.getcwd()}")
+        print(f"[INFO] 项目根目录: {BASE_DIR}")
     return available_files
 
 class KnowledgeChunk:
@@ -39,14 +45,22 @@ def load_and_chunk_knowledge():
     """加载并细粒度切块知识库"""
     chunks = []
 
+    print(f"[INFO] 开始加载知识库...")
+    print(f"[INFO] 数据目录: {DATA_DIR}")
+    print(f"[INFO] 当前工作目录: {os.getcwd()}")
+
     for file_path in KNOWLEDGE_FILES:
         if not os.path.exists(file_path):
             print(f"[WARNING] 文件不存在: {file_path}")
             continue
 
+        print(f"[INFO] 正在读取文件: {file_path}")
+
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
+
+            print(f"[INFO] 文件大小: {len(content)} 字符")
 
             # 章节化的文件格式解析 + 精细切块
             lines = content.split('\n')
@@ -631,6 +645,9 @@ def run_advanced_server():
 
     # 从环境变量获取端口，默认8000（Render会提供PORT环境变量）
     PORT = int(os.environ.get('PORT', 8000))
+    print(f"[INFO] 端口: {PORT}")
+    print(f"[INFO] 环境: {'生产环境' if os.environ.get('PORT') else '开发环境'}")
+
     # 使用0.0.0.0以支持外部访问（Render部署需要）
     server_address = ('0.0.0.0', PORT)
 
@@ -641,6 +658,10 @@ def run_advanced_server():
 
         if not knowledge_chunks:
             print("[ERROR] 知识库为空，请检查数据文件")
+            print("[ERROR] 尝试查找可用的数据文件:")
+            import glob
+            data_files = glob.glob("**/*.txt", recursive=True)
+            print(f"[INFO] 找到的txt文件: {data_files}")
             return
 
         print()
@@ -660,7 +681,13 @@ def run_advanced_server():
         httpd.serve_forever()
 
     except Exception as e:
-        print(f"服务器启动失败: {e}")
+        print(f"[ERROR] 服务器启动失败: {e}")
+        import traceback
+        import sys
+        traceback.print_exc()
+        # 将错误输出到stderr，这样在Render上也能看到
+        print(f"[ERROR] 详细错误: {str(e)}", file=sys.stderr)
+        print(f"[ERROR] 错误类型: {type(e).__name__}", file=sys.stderr)
         input("按回车键退出...")
 
 if __name__ == "__main__":
