@@ -1,7 +1,6 @@
 """
-西方音乐史RAG问答系统 - 高级版本
-改进：精细文本切块、智能检索、针对性答案生成
-集成Z.ai大语言模型增强对话能力
+西方音乐史RAG问答系统 - AI增强版本
+集成Z.ai大语言模型，提供智能对话体验
 """
 import json
 import os
@@ -19,7 +18,7 @@ ZAI_API_KEY = os.getenv('ZAI_API_KEY')
 ZAI_API_BASE = os.getenv('ZAI_API_BASE', 'https://api.z.ai/api/anthropic')
 ZAI_MODEL = os.getenv('ZAI_MODEL', 'claude-sonnet-4-20250514')
 
-# 知识库数据路径 - 使用相对路径以支持Render部署
+# 知识库数据路径
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 KNOWLEDGE_FILES = [
@@ -49,8 +48,8 @@ class KnowledgeChunk:
         self.content = content
         self.keywords = keywords or []
         self.section = section
-        self.importance = importance  # 重要性评分
-        self.similarity_score = 0  # 相似度评分
+        self.importance = importance
+        self.similarity_score = 0
 
 def load_and_chunk_knowledge():
     """加载并细粒度切块知识库"""
@@ -82,147 +81,86 @@ def load_and_chunk_knowledge():
             for line in lines:
                 line_stripped = line.strip()
 
-                # 识别章节标题
-                if line_stripped.startswith('第') and '章' in line_stripped:
-                    # 保存前一个块
-                    if current_section and current_chunk:
-                        chunk_content = '\n'.join(current_chunk).strip()
-                        if chunk_content:
-                            chunks.append(create_intelligent_chunk(
-                                chunk_content, chunk_keywords, current_section
-                            ))
+                # 检测章节标题
+                if line_stripped and (line_stripped.startswith('#') or re.match(r'^[一二三四五六七八九十]+[、．.]', line_stripped)):
+                    # 保存当前块
+                    if current_chunk:
+                        chunk_text = '\n'.join(current_chunk).strip()
+                        if chunk_text and len(chunk_text) > 50:
+                            chunk = KnowledgeChunk(chunk_text, chunk_keywords, current_section, importance=calculate_importance(chunk_text))
+                            chunks.append(chunk)
 
                     # 开始新章节
-                    current_section = line_stripped
+                    current_section = line_stripped.replace('#', '').strip()
                     current_chunk = []
-                    chunk_keywords = []
+                    chunk_keywords = extract_keywords_from_heading(current_section)
 
-                # 识别重要的知识点标题
-                elif current_section and is_important_heading(line_stripped):
-                    # 保存前一个块（如果非空）
-                    if current_chunk:
-                        chunk_content = '\n'.join(current_chunk).strip()
-                        if chunk_content:
-                            chunks.append(create_intelligent_chunk(
-                                chunk_content, chunk_keywords, current_section
-                            ))
+                else:
+                    # 收集当前行到当前块中
+                    if line_stripped or current_chunk:
+                        current_chunk.append(line)
 
-                    # 开始新的知识块
-                    current_chunk = [line]
-                    # 提取关键词
-                    chunk_keywords = extract_keywords_from_heading(line_stripped)
+                        # 如果块足够大，创建新块
+                        if len(current_chunk) > 15:  # 15行为一个块
+                            chunk_text = '\n'.join(current_chunk).strip()
+                            if chunk_text and len(chunk_text) > 50:
+                                chunk = KnowledgeChunk(chunk_text, chunk_keywords, current_section, importance=calculate_importance(chunk_text))
+                                chunks.append(chunk)
+                            current_chunk = []
 
-                # 普通内容行
-                elif current_section and line_stripped:
-                    current_chunk.append(line)
-
-            # 保存最后一个块
-            if current_section and current_chunk:
-                chunk_content = '\n'.join(current_chunk).strip()
-                if chunk_content:
-                    chunks.append(create_intelligent_chunk(
-                        chunk_content, chunk_keywords, current_section
-                    ))
+            # 处理最后一个块
+            if current_chunk:
+                chunk_text = '\n'.join(current_chunk).strip()
+                if chunk_text and len(chunk_text) > 50:
+                    chunk = KnowledgeChunk(chunk_text, chunk_keywords, current_section, importance=calculate_importance(chunk_text))
+                    chunks.append(chunk)
 
         except Exception as e:
-            print(f"[ERROR] 读取文件 {file_path} 时出错: {e}")
+            print(f"[ERROR] 处理文件 {file_path} 时出错: {str(e)}")
 
-    print(f"[INFO] 成功创建 {len(chunks)} 个知识块")
+    print(f"[INFO] 总共加载了 {len(chunks)} 个知识块")
     return chunks
 
-def is_important_heading(line):
-    """判断是否是重要的知识标题"""
-    important_patterns = [
-        r'^一、',  # 一级标题
-        r'^（一）',  # 二级标题
-        r'^二、',
-        r'^（二）',
-        r'^三、',
-        r'^（三）',
-        r'^定义',
-        r'^特征',
-        r'^特点',
-        r'^主要',
-        r'^核心',
-        r'^代表',
-        r'^人物',  # 添加人物相关标题
-        r'^作曲家',  # 添加作曲家相关标题
-    ]
-    return any(re.match(pattern, line) for pattern in important_patterns)
-
-def extract_keywords_from_heading(heading):
-    """从标题中提取关键词"""
-    # 移除标点符号和数字
-    cleaned = re.sub(r'[一、（）、\d、]', '', heading)
-    # 分解成关键词
-    keywords = [word for word in cleaned.split() if len(word) > 1]
-    return keywords
-
-def create_intelligent_chunk(content, keywords, section):
-    """创建智能知识块"""
-    # 计算重要性
-    importance = calculate_importance(content)
-
-    # 如果没有关键词，从内容中提取
-    if not keywords:
-        keywords = extract_keywords_from_content(content)
-
-    return KnowledgeChunk(
-        content=content,
-        keywords=keywords,
-        section=section,
-        importance=importance
-    )
-
 def calculate_importance(content):
-    """计算内容重要性"""
-    importance_score = 0
+    """计算内容的重要性评分"""
+    score = 0
 
-    # 检查重要性关键词
-    importance_keywords = [
-        '定义', '特征', '特点', '主要', '核心', '代表',
-        '重要', '关键', '意义', '影响', '作用', '地位',
-        '确立', '发展', '演变', '形成', '开创'
-    ]
+    # 检查重要人物
+    important_persons = ['贝多芬', '莫扎特', '海顿', '巴赫', '亨德尔', '肖邦',
+                       '李斯特', '瓦格纳', '德彪西', '帕莱斯特里那']
+    for person in important_persons:
+        if person in content:
+            score += 2
 
-    for keyword in importance_keywords:
-        if keyword in content:
-            importance_score += 1
+    # 检查重要概念
+    important_terms = ['奏鸣曲', '交响曲', '赋格', '对位法', '和声', '调式']
+    for term in important_terms:
+        if term in content:
+            score += 1
 
-    # 检查是否有详细解释（内容长度也是一个指标）
-    if len(content) > 100:
-        importance_score += 1
-    if len(content) > 300:
-        importance_score += 1
+    # 检查历史时期关键词
+    periods = ['巴洛克', '古典主义', '浪漫主义', '文艺复兴', '中世纪', '现代主义']
+    for period in periods:
+        if period in content:
+            score += 1
 
-    return importance_score
+    return score
 
 def extract_keywords_from_content(content):
     """从内容中提取关键词"""
-    # 简单的关键词提取策略
     keywords = []
-
-    # 提取人名（通常是专有名词）
-    names = re.findall(r'[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*', content)
-    keywords.extend(names[:5])  # 取前5个
-
-    # 提取重要的音乐术语
-    music_terms = [
-        '通奏低音', '赋格', '奏鸣曲', '协奏曲', '交响曲',
-        '格里高利圣咏', '奥尔加农', '经文歌', '牧歌',
-        '和声', '调式', '音程', '节奏', '旋律',
-        '巴洛克', '古典主义', '浪漫主义', '文艺复兴'
-    ]
-
-    for term in music_terms:
-        if term in content and term not in keywords:
+    important_terms = ['奏鸣曲', '交响曲', '赋格', '对位法', '和声', '调式',
+                    '巴洛克', '古典主义', '浪漫主义', '文艺复兴', '中世纪']
+    for term in important_terms:
+        if term in content:
             keywords.append(term)
-
-    return keywords[:8]  # 限制关键词数量
+    return keywords[:5]  # 最多返回5个关键词
 
 def intelligent_retrieve(query, knowledge_chunks):
-    """智能检索：找到最相关的知识块"""
+    """智能检索最相关的知识块"""
     query_lower = query.lower()
+
+    print(f"[INFO] 检索查询: {query}")
 
     # 1. 为每个知识块计算相似度
     for chunk in knowledge_chunks:
@@ -245,23 +183,12 @@ def calculate_similarity(query_lower, chunk):
     entity_types = {'person': 0, 'term': 0, 'period': 0, 'general': 0}
 
     # 1. 实体识别 - 区分人名、术语、时期
-    person_names = [
-        '贝多芬', '莫扎特', '海顿', '巴赫', '亨德尔', '肖邦',
-        '李斯特', '瓦格纳', '德彪西', '勋伯格', '帕莱斯特里那',
-        '迪法伊', '奥克冈', '佩里', '蒙泰韦尔迪', '吕利', '拉莫',
-        '珀塞尔', '科雷利', '维瓦尔第', '韦伯', '门德尔松', '舒曼',
-        '舒伯特', '勃拉姆斯', '威尔第', '罗西尼', '贝利尼', '多尼采蒂',
-        '马肖', '若斯坎', '兰迪尼', '格里格', '西贝柳斯', '柴可夫斯基',
-        '穆索尔斯基', '里姆斯基', '斯特拉文斯基', '普罗科菲耶夫', '肖斯塔科维奇'
-    ]
+    person_names = ['贝多芬', '莫扎特', '海顿', '巴赫', '亨德尔', '肖邦',
+                   '李斯特', '瓦格纳', '德彪西', '勋伯格', '帕莱斯特里那']
 
-    music_terms = [
-        '通奏低音', '赋格', '奏鸣曲', '协奏曲', '交响曲', '弥撒曲',
-        '格里高利圣咏', '奥尔加农', '经文歌', '牧歌', '歌剧',
-        '和声', '调式', '音程', '节奏', '旋律', '对位法',
-        '巴洛克', '古典主义', '浪漫主义', '文艺复兴', '印象主义',
-        '表现主义', '十二音', '新古典主义', '标题音乐'
-    ]
+    music_terms = ['通奏低音', '赋格', '奏鸣曲', '协奏曲', '交响曲', '弥撒曲',
+                   '格里高利圣咏', '奥尔加农', '经文歌', '牧歌', '歌剧',
+                   '和声', '调式', '音程', '节奏', '旋律', '对位法']
 
     # 2. 实体匹配 - 人名给予最高优先级
     query_entity_type = None
@@ -275,252 +202,117 @@ def calculate_similarity(query_lower, chunk):
                 entity_types['person'] += 15  # 人名部分匹配给予高分
                 break
 
-    # 3. 术语匹配 - 给予中等优先级
-    if query_entity_type != 'person':
-        for term in music_terms:
-            if term.lower() in query_lower:
-                if term.lower() in chunk.content.lower():
-                    entity_types['term'] += 10  # 术语完全匹配给高分
-                elif any(word in chunk.content.lower() for word in term.lower().split()):
-                    entity_types['term'] += 7  # 术语部分匹配给中分
+    # 3. 术语匹配
+    for term in music_terms:
+        if term in query_lower:
+            query_entity_type = 'term'
+            if term in chunk.content:
+                entity_types['term'] += 10
+                score += 5  # 术语匹配额外加分
 
-    # 4. 时期匹配 - 给予确认性权重
-    detected_period = identify_period_from_query(query_lower)
-    if detected_period and detected_period in chunk.section.lower():
-        entity_types['period'] += 8  # 时期匹配给予中等权重
+    # 4. 时期匹配
+    periods = ['巴洛克', '古典主义', '浪漫主义', '文艺复兴', '中世纪', '印象主义']
+    for period in periods:
+        if period in query_lower:
+            entity_types['period'] = True
+            if period in chunk.content:
+                score += 8
 
-    # 5. 关键词匹配（降低权重，避免误判）
+    # 5. 关键词匹配
     for keyword in chunk.keywords:
-        if keyword.lower() in query_lower:
-            entity_types['general'] += 3  # 关键词匹配给低分
-        elif any(word in query_lower for word in keyword.lower().split()):
-            entity_types['general'] += 1  # 部分匹配给最低分
+        if keyword in query_lower:
+            score += 3
 
-    # 6. 内容词汇匹配（最低权重）
+    # 6. 内容相似度 - 简单的词频匹配
     query_words = set(query_lower.split())
-    for word in query_words:
-        if len(word) > 1 and word in chunk.content.lower():
-            entity_types['general'] += 0.5
+    content_words = set(chunk.content.lower().split())
+    common_words = query_words.intersection(content_words)
+    if common_words:
+        similarity_ratio = len(common_words) / len(query_words)
+        score += similarity_ratio * 30
 
-    # 7. 计算总分 - 优先考虑实体匹配
-    total_score = sum(entity_types.values())
+    # 7. 实体类型匹配奖励
+    if query_entity_type:
+        entity_types['general'] = sum([entity_types['person'], entity_types['term']])
 
-    # 8. 重要性加权（谨慎使用）
-    if entity_types['person'] > 0:
-        # 如果匹配到人名，降低重要性权重的影响
-        total_score += chunk.importance * 0.1
-    else:
-        # 否则正常加权
-        total_score += chunk.importance * 0.5
-
-    # 保存实体类型信息用于调试
-    chunk.entity_types = entity_types
-
-    return total_score
+    return score
 
 def identify_period_from_query(query_lower):
-    """从查询中识别时期"""
-    period_mapping = {
-        '中世纪': ['中世纪', '格里高利', '圣咏', '教会', '奥尔加农', '经文歌'],
-        '文艺复兴': ['文艺复兴', '迪法伊', '勃艮第', '奥克冈', '帕莱斯特里那', '人文主义'],
-        '巴洛克': ['巴洛克', '佩里', '蒙泰韦尔迪', '吕利', '拉莫', '珀塞尔', '科雷利', '通奏低音', '赋格', '巴赫', '亨德尔', '维瓦尔第'],
-        '古典主义': ['古典主义', '海顿', '莫扎特', '贝多芬', '华美风格', '敏感风格', '曼海姆', '斯塔米茨', '奏鸣曲式', '交响曲', 'CPE巴赫'],
-        '浪漫主义': ['浪漫主义', '韦伯', '门德尔松', '舒曼', '肖邦', '李斯特', '瓦格纳', '马勒', '施特劳斯', '情感至上', '标题音乐', '民族主义', '歌剧', '舒伯特', '勃拉姆斯', '威尔第'],
-        '20世纪': ['20世纪', '德彪西', '拉威尔', '勋伯格', '表现主义', '十二音', '新古典主义', '梅西安', '艾夫斯', '印象主义', '简约主义', '斯特拉文斯基', '凯奇']
+    """从查询中识别历史时期"""
+    periods = {
+        '中世纪': ['中世纪', '格里高利圣咏', '单声部'],
+        '文艺复兴': ['文艺复兴', '帕莱斯特里那', '复调'],
+        '巴洛克': ['巴洛克', '巴赫', '亨德尔', '通奏低音'],
+        '古典主义': ['古典主义', '海顿', '莫扎特', '贝多芬'],
+        '浪漫主义': ['浪漫主义', '肖邦', '李斯特', '瓦格纳'],
+        '现代主义': ['现代主义', '德彪西', '斯特拉文斯基']
     }
 
-    for period, keywords in period_mapping.items():
-        if any(keyword in query_lower for keyword in keywords):
-            return period
+    for period, keywords in periods.items():
+        for keyword in keywords:
+            if keyword in query_lower:
+                return period
 
     return None
 
 def generate_targeted_answer(query, relevant_chunks, question_type):
-    """生成针对性的答案 - 改进版"""
+    """生成针对不同问题类型的答案"""
     if not relevant_chunks:
-        return "该问题不在西方音乐史知识库范围内，请提供与古希腊、中世纪、文艺复兴、巴洛克、古典主义、浪漫主义或20世纪音乐相关的问题。"
+        return "很抱歉，我在知识库中找不到相关信息。建议您重新组织问题或扩大查询范围。"
 
-    # 1. 分析查询类型
-    query_type_enhanced = analyze_query_intent(query)
+    # 获取最相关的内容
+    content = relevant_chunks[0].content
 
-    # 2. 根据查询意图选择最佳内容
-    primary_chunk = select_best_chunk(query, relevant_chunks, query_type_enhanced)
-    answer_content = primary_chunk.content
-
-    # 3. 根据问题类型生成不同格式
     if question_type == 'definition':
-        return generate_definition_answer(query, answer_content, relevant_chunks)
+        return f"**【名词解释】**\n\n{query}\n\n{content[:500]}..."
+
     elif question_type == 'short_answer':
-        return generate_short_answer(query, answer_content, relevant_chunks)
-    elif question_type == 'essay':
-        return generate_essay_answer(query, answer_content, relevant_chunks)
-    else:
-        return generate_general_answer(query, answer_content, relevant_chunks)
-
-def analyze_query_intent(query):
-    """分析查询意图 - 改进版"""
-    query_lower = query.lower()
-
-    # 人名列表
-    person_names = [
-        '贝多芬', '莫扎特', '海顿', '巴赫', '亨德尔', '肖邦',
-        '李斯特', '瓦格纳', '德彪西', '勋伯格', '帕莱斯特里那',
-        '迪法伊', '奥克冈', '佩里', '蒙泰韦尔迪', '吕利', '拉莫',
-        '珀塞尔', '科雷利', '维瓦尔第', '韦伯', '门德尔松', '舒曼',
-        '舒伯特', '勃拉姆斯', '威尔第', '罗西尼', '贝利尼', '多尼采蒂'
-    ]
-
-    # 音乐术语列表
-    music_terms = [
-        '通奏低音', '赋格', '奏鸣曲', '协奏曲', '交响曲', '弥撒曲',
-        '格里高利圣咏', '奥尔加农', '经文歌', '牧歌', '歌剧',
-        '和声', '调式', '音程', '节奏', '旋律', '对位法'
-    ]
-
-    # 分析意图
-    intent = {
-        'type': 'general',
-        'confidence': 'low'
-    }
-
-    # 1. 检查是否为人名查询
-    for person in person_names:
-        if person.lower() in query_lower:
-            intent = {
-                'type': 'person',
-                'entity': person,
-                'confidence': 'high'
-            }
-            break
-
-    # 2. 如果不是人名，检查是否为术语查询
-    if intent['type'] == 'general':
-        for term in music_terms:
-            if term.lower() in query_lower:
-                intent = {
-                    'type': 'term',
-                    'entity': term,
-                    'confidence': 'medium'
-                }
-                break
-
-    return intent
-
-def select_best_chunk(query, relevant_chunks, query_intent):
-    """根据查询意图选择最佳知识块 - 改进版"""
-    if not relevant_chunks:
-        return None
-
-    # 如果是人名查询，优先选择包含该人名的块
-    if query_intent['type'] == 'person':
-        person_name = query_intent['entity']
-
-        # 1. 首先寻找直接包含该人名的块
-        for chunk in relevant_chunks:
-            if person_name.lower() in chunk.content.lower():
-                return chunk
-
-        # 2. 如果没有找到，寻找在人物列表或作曲家相关的块
-        for chunk in relevant_chunks:
-            content_lower = chunk.content.lower()
-            # 检查是否为人物描述或作曲家介绍
-            if any(indicator in content_lower for indicator in [
-                '人物', '作曲家', '代表', '主要', '重要', '时期'
-            ]):
-                return chunk
-
-        # 3. 如果都没有，检查知识块是否与该人物相关的时期匹配
-        detected_period = identify_period_from_query(query.lower())
-        if detected_period:
-            for chunk in relevant_chunks:
-                if detected_period in chunk.section.lower():
-                    return chunk
-
-    # 如果是术语查询，优先选择定义该术语的块
-    if query_intent['type'] == 'term':
-        for chunk in relevant_chunks:
-            # 查找包含"定义"、"是什么"、"指"等内容的块
-            if any(marker in chunk.content for marker in ['定义', '是指', '为', '是']):
-                return chunk
-
-    # 默认返回相似度最高的块
-    return relevant_chunks[0]
-
-def generate_definition_answer(query, content, relevant_chunks):
-    """生成名词解释答案"""
-    # 提取核心定义（通常是前几句）
-    lines = content.split('\n')
-    definition_lines = []
-
-    for line in lines[:8]:  # 取前8行
-        line_clean = line.strip()
-        if line_clean and not line_clean.startswith(('一、', '（一）', '二、', '（二）')):
-            if len(line_clean) > 10:  # 确保有实质内容
-                definition_lines.append(line_clean)
-                if len(definition_lines) >= 3:
-                    break
-
-    if definition_lines:
-        definition = '\n'.join(definition_lines)
-        return f"**【名词解释】**\n\n{query}\n\n{definition}"
-    else:
-        return f"**【名词解释】**\n\n{query}\n\n{content[:200]}..."
-
-def generate_short_answer(query, content, relevant_chunks):
-    """生成简答题答案"""
-    # 提取关键特征要点
-    lines = content.split('\n')
-    key_points = []
-
-    for line in lines:
-        line_clean = line.strip()
-        # 识别特征、特点类内容
-        if any(keyword in line_clean for keyword in ['特征', '特点', '主要', '核心', '重要', '代表']):
+        # 提取要点
+        lines = content.split('\n')
+        key_points = []
+        for line in lines[:8]:
+            line_clean = line.strip()
             if line_clean and len(line_clean) > 10:
                 key_points.append(line_clean)
-                if len(key_points) >= 4:  # 限制要点数量
-                    break
+            if len(key_points) >= 4:
+                break
 
-    if key_points:
-        points_text = '\n'.join([f"• {point}" for point in key_points])
-        return f"**【简答题】**\n\n{query}\n\n{points_text}"
-    else:
-        return f"**【简答题】**\n\n{query}\n\n{content[:300]}..."
+        if key_points:
+            points_text = '\n'.join([f"• {point}" for point in key_points])
+            return f"**【简答题】**\n\n{query}\n\n{points_text}"
+        else:
+            return f"**【简答题】**\n\n{query}\n\n{content[:300]}..."
 
-def generate_essay_answer(query, content, relevant_chunks):
-    """生成论述题答案"""
-    # 对于论述题，使用完整的第一个相关块
-    # 如果有多个相关块，整合它们
-    if len(relevant_chunks) > 1:
-        combined_content = '\n\n'.join([chunk.content for chunk in relevant_chunks[:2]])
-        return f"**【论述题】**\n\n{query}\n\n{combined_content}"
-    else:
-        return f"**【论述题】**\n\n{query}\n\n{content}"
+    elif question_type == 'essay':
+        # 对于论述题，使用完整的第一个相关块
+        if len(relevant_chunks) > 1:
+            combined_content = '\n\n'.join([chunk.content for chunk in relevant_chunks[:2]])
+            return f"**【论述题】**\n\n{query}\n\n{combined_content}"
+        else:
+            return f"**【论述题】**\n\n{query}\n\n{content}"
 
-def generate_general_answer(query, content, relevant_chunks):
-    """生成一般性问题答案"""
-    # 提取最相关的内容段落
-    lines = content.split('\n')
-    relevant_lines = []
+    else:  # general
+        # 提取最相关的内容段落
+        lines = content.split('\n')
+        relevant_lines = []
 
-    for line in lines[:10]:
-        line_clean = line.strip()
-        if line_clean and len(line_clean) > 10:
-            relevant_lines.append(line_clean)
+        for line in lines[:10]:
+            line_clean = line.strip()
+            if line_clean and len(line_clean) > 10:
+                relevant_lines.append(line_clean)
             if len(relevant_lines) >= 5:
                 break
 
-    if relevant_lines:
-        relevant_text = '\n'.join(relevant_lines)
-        return f"**【综合回答】**\n\n{query}\n\n{relevant_text}"
-    else:
-        return f"**【综合回答】**\n\n{query}\n\n{content[:250]}..."
+        if relevant_lines:
+            return f"**【综合回答】**\n\n{query}\n\n" + '\n'.join([line for line in relevant_lines[:5]])
+        else:
+            return f"**【综合回答】**\n\n{query}\n\n{content[:400]}..."
 
 def classify_question_type(question):
-    """题目分类"""
+    """分类问题类型"""
     question_lower = question.lower()
 
-    if any(keyword in question_lower for keyword in ['什么是', '定义', '名词解释', '解释', '概念', '含义', '术语']):
+    if any(keyword in question_lower for keyword in ['是什么', '什么', '定义', '解释', '何为', '指的是']):
         return 'definition'
 
     elif any(keyword in question_lower for keyword in ['特点', '特征', '风格', '主要', '简述', '简答', '谈谈', '概括']):
@@ -671,10 +463,10 @@ def generate_ai_enhanced_answer(query, retrieved_content, question_type, context
         print("[WARNING] AI回答生成失败，回退到基础检索模式")
         return generate_targeted_answer(query, [], question_type)
 
-class AdvancedRAGHandler(BaseHTTPRequestHandler):
+class AIEnhancedRAGHandler(BaseHTTPRequestHandler):
     def _set_headers(self, status_code=200):
         self.send_response(status_code)
-        self.send_header('Content-type', 'application/json; charset=utf-8')
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
@@ -682,7 +474,7 @@ class AdvancedRAGHandler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self._set_headers()
-        self.wfile.write(json.dumps({'status': 'ok'}).encode())
+        self.wfile.write(json.dumps({'status': 'ok'}).encode()
 
     def do_GET(self):
         if self.path == '/api/health':
@@ -690,17 +482,17 @@ class AdvancedRAGHandler(BaseHTTPRequestHandler):
             self._set_headers()
             response = {
                 'status': 'ok',
-                'message': '西方音乐史RAG系统运行正常（高级版本）',
+                'message': '西方音乐史RAG系统运行正常（AI增强版本）',
                 'server': 'Python http.server',
-                'version': '7.0.0',
-                'knowledge_base': '基于智能切块的专业知识库',
+                'version': '8.0.0',
+                'knowledge_base': '基于Z.ai AI增强的专业知识库',
                 'data_sources': KNOWLEDGE_FILES,
                 'features': [
                     '智能文本切块',
                     '细粒度知识检索',
                     '针对性答案生成',
                     '多维度相似度计算',
-                    '智能问答体验'
+                    'Z.ai AI智能对话增强'
                 ]
             }
             self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
@@ -805,9 +597,9 @@ class AdvancedRAGHandler(BaseHTTPRequestHandler):
             self._set_headers(404)
             self.wfile.write(json.dumps({'error': '路径不存在'}).encode())
 
-def run_advanced_server():
+def run_ai_enhanced_server():
     print("=" * 70)
-    print("西方音乐史RAG问答系统 - 高级版本")
+    print("西方音乐史RAG问答系统 - AI增强版本")
     print("=" * 70)
     print()
 
@@ -817,12 +609,14 @@ def run_advanced_server():
     print("  - 针对性答案：根据问题类型生成格式化回答")
     print("  - 多维度相似度：关键词匹配 + 内容匹配 + 时期匹配")
     print("  - 智能问答体验：真正的RAG，不是文档检索")
+    print("  - Z.ai AI增强：基于大语言模型的智能对话")
     print()
 
     # 从环境变量获取端口，默认8000（Render会提供PORT环境变量）
     PORT = int(os.environ.get('PORT', 8000))
     print(f"[INFO] 端口: {PORT}")
     print(f"[INFO] 环境: {'生产环境' if os.environ.get('PORT') else '开发环境'}")
+    print(f"[INFO] AI提供商: {'Z.ai API' if ZAI_API_KEY else '基础检索模式'}")
 
     # 使用0.0.0.0以支持外部访问（Render部署需要）
     server_address = ('0.0.0.0', PORT)
@@ -846,9 +640,9 @@ def run_advanced_server():
         print(f"知识块数量: {len(knowledge_chunks)}")
         print()
 
-        httpd = HTTPServer(server_address, AdvancedRAGHandler)
+        httpd = HTTPServer(server_address, AIEnhancedRAGHandler)
         print("=" * 70)
-        print("高级RAG服务器启动成功！")
+        print("AI增强RAG服务器启动成功！")
         print("=" * 70)
         print()
         print("按Ctrl+C停止服务器")
@@ -861,10 +655,8 @@ def run_advanced_server():
         import traceback
         import sys
         traceback.print_exc()
-        # 将错误输出到stderr，这样在Render上也能看到
         print(f"[ERROR] 详细错误: {str(e)}", file=sys.stderr)
         print(f"[ERROR] 错误类型: {type(e).__name__}", file=sys.stderr)
-        input("按回车键退出...")
 
 if __name__ == "__main__":
-    run_advanced_server()
+    run_ai_enhanced_server()

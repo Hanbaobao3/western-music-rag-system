@@ -1,14 +1,15 @@
 # Western Music History RAG System - Render部署依赖包
-# 只有Python标准库和必要依赖
+# 基础依赖 + Z.ai API集成
 
-# 核心依赖（无额外安装）
-# Python标准库已包含在Render Python 3.9+中
+# HTTP请求库
+requests>=2.31.0
+
+# 环境变量管理
+python-dotenv>=1.0.0
+
+# Python标准库（无需安装）
 # http.server - 内置模块
 # json - 内置模块
 # os - 内置模块
 # time - 内置模块
 # re - 内置模块
-
-# 如果需要其他功能，可以添加：
-# urllib3>=1.26.18  # 更好的HTTP处理
-# charset-normalizer>=3.3.2  # 字符编码处理
