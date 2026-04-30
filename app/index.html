@@ -369,7 +369,9 @@
         // 调用RAG API（修复版）
         async function callRAGAPI(query) {
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/query', {
+                // 动态获取当前服务器的API地址
+                const apiUrl = window.location.origin + '/api/query';
+                const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
